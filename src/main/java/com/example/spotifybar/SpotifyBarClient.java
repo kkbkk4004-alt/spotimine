@@ -26,6 +26,7 @@ public class SpotifyBarClient implements ClientModInitializer {
 				"key.spotifybar.toggle", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, "key.categories.spotifybar"));
 
 		spotify.start();
+		ChatHook.register();
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			while (openKey.wasPressed()) {

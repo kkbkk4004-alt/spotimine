@@ -21,6 +21,9 @@ account, nothing leaves your PC.
 
 - Card shape: Square, Rounded, Pill or Cut corners (button in the J screen).
 
+- Chat: while the chat is open you can drag the card, use the previous / play-pause / next buttons
+  that appear under it, and click the time bar to sync the time. No need for the J screen.
+
 ## Notes
 
 - Needs the Spotify **desktop app** (not the web player). The song is read from
