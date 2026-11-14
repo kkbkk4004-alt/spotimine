@@ -7,7 +7,7 @@ import net.minecraft.client.gui.DrawContext;
 /** Draws the now-playing card. Shared by the HUD and the edit screen. */
 public final class SpotifyWidget {
 	public static final int WIDTH = 150;
-	public static final int HEIGHT = 36;
+	public static final int HEIGHT = 40;
 	private static final int PAD = 6;
 
 	private static final int BG = 0xB0101010;
@@ -51,6 +51,20 @@ public final class SpotifyWidget {
 		ctx.getMatrices().scale(0.75f, 0.75f, 1f);
 		ctx.drawText(tr, sp.playing ? "Now playing" : "Paused", 0, 0, sp.playing ? GREEN : GRAY, false);
 		ctx.getMatrices().pop();
+
+		drawWaves(ctx, x + WIDTH - PAD - 6 * 4 + 2, y + HEIGHT - 5, sp.playing);
+	}
+
+	/** Animated equalizer bars. They dance while music plays and sit flat when paused. */
+	private static void drawWaves(DrawContext ctx, int x, int baseY, boolean playing) {
+		long t = System.currentTimeMillis();
+		for (int i = 0; i < 6; i++) {
+			double h = playing
+					? 0.2 + 0.8 * Math.abs(Math.sin(t / 170.0 + i * 1.7) * Math.cos(t / 290.0 + i * 0.9))
+					: 0.12;
+			int hh = Math.max(1, (int) (11 * h));
+			ctx.fill(x + i * 4, baseY - hh, x + i * 4 + 2, baseY, playing ? GREEN : GRAY);
+		}
 	}
 
 	private static String trim(TextRenderer tr, String s, int maxW) {
