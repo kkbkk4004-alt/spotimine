@@ -30,6 +30,7 @@ public class SpotifyScreen extends Screen {
 
 	private ButtonWidget matchButton;
 	private ButtonWidget glowButton;
+	private ButtonWidget shapeButton;
 	private final ButtonWidget[] tabButtons = new ButtonWidget[3];
 	private TextFieldWidget hexField;
 
@@ -89,7 +90,7 @@ public class SpotifyScreen extends Screen {
 	@Override
 	protected void init() {
 		int cx = this.width / 2;
-		top = Math.min(this.height / 2 + 10, this.height - 180);
+		top = Math.min(this.height / 2 + 10, this.height - 204);
 
 		addDrawableChild(ButtonWidget.builder(Text.literal("Hide / show bar"), b -> {
 			Config.get().visible = !Config.get().visible;
@@ -111,16 +112,22 @@ public class SpotifyScreen extends Screen {
 		}).dimensions(cx + 2, top + 24, 118, 20).build();
 		addDrawableChild(glowButton);
 
+		shapeButton = ButtonWidget.builder(Text.literal("Shape"), b -> {
+			Config.get().shape = (Config.get().shape + 1) % SpotifyWidget.SHAPE_NAMES.length;
+			Config.get().save();
+		}).dimensions(cx - 120, top + 48, 240, 20).build();
+		addDrawableChild(shapeButton);
+
 		for (int i = 0; i < 3; i++) {
 			final int idx = i;
 			tabButtons[i] = ButtonWidget.builder(Text.literal(TAB_NAMES[i]), b -> {
 				tab = idx;
 				refreshHexField();
-			}).dimensions(cx - 119 + i * 80, top + 48, 78, 18).build();
+			}).dimensions(cx - 119 + i * 80, top + 72, 78, 18).build();
 			addDrawableChild(tabButtons[i]);
 		}
 
-		hexField = new TextFieldWidget(this.textRenderer, cx - 40, top + 72 + ROWS * (SW + SW_GAP) + 4,
+		hexField = new TextFieldWidget(this.textRenderer, cx - 40, top + 96 + ROWS * (SW + SW_GAP) + 4,
 				80, 18, Text.literal("Hex"));
 		hexField.setMaxLength(7);
 		hexField.setPlaceholder(Text.literal("#RRGGBB"));
@@ -143,7 +150,7 @@ public class SpotifyScreen extends Screen {
 	}
 
 	private int gridY() {
-		return top + 72;
+		return top + 96;
 	}
 
 	@Override
@@ -155,6 +162,7 @@ public class SpotifyScreen extends Screen {
 		clamp(cfg);
 		matchButton.setMessage(Text.literal("Match cover: " + (cfg.matchCover ? "ON" : "OFF")));
 		glowButton.setMessage(Text.literal("Glow: " + (cfg.glow ? "ON" : "OFF")));
+		shapeButton.setMessage(Text.literal("Card shape: " + SpotifyWidget.SHAPE_NAMES[cfg.shape % SpotifyWidget.SHAPE_NAMES.length]));
 		for (int i = 0; i < 3; i++) tabButtons[i].active = i != tab;
 
 		SpotifyWidget.draw(ctx, cfg.x, cfg.y);

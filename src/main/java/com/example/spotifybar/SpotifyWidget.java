@@ -30,6 +30,46 @@ public final class SpotifyWidget {
 		return new int[]{textX, y + BAR_Y, x + WIDTH - PAD - textX};
 	}
 
+	/** Names for the shape button. */
+	public static final String[] SHAPE_NAMES = {"Square", "Rounded", "Pill", "Cut corners"};
+
+	private static int radius(int shape) {
+		return switch (shape) {
+			case 1 -> 6;
+			case 2 -> 14;
+			case 3 -> 7;
+			default -> 0;
+		};
+	}
+
+	/** How far row `row` of a card of height h is cut in from the left/right edge. */
+	private static int inset(int row, int h, int shape) {
+		int r = radius(shape);
+		if (r <= 0) return 0;
+		int d = Math.min(row, h - 1 - row);
+		if (d >= r) return 0;
+		if (shape == 3) return r - d; // diagonal cut
+		double dy = r - d - 0.5;
+		return (int) Math.ceil(r - Math.sqrt(Math.max(0, r * r - dy * dy)));
+	}
+
+	/**
+	 * Fills the card shape row by row (rows with the same cut are merged into one fill).
+	 * stripeW > 0 draws only a stripe of that width along the left edge instead of the full width.
+	 */
+	private static void fillShape(DrawContext ctx, int x, int y, int w, int h, int shape, int color, int stripeW) {
+		int row = 0;
+		while (row < h) {
+			int ins = inset(row, h, shape);
+			int end = row + 1;
+			while (end < h && inset(end, h, shape) == ins) end++;
+			int x0 = x + ins;
+			int x1 = stripeW > 0 ? x + ins + stripeW : x + w - ins;
+			ctx.fill(x0, y + row, x1, y + end, color);
+			row = end;
+		}
+	}
+
 	private static int mix(int a, int b, float t) {
 		int r = Math.round(((a >> 16) & 255) * (1 - t) + ((b >> 16) & 255) * t);
 		int g = Math.round(((a >> 8) & 255) * (1 - t) + ((b >> 8) & 255) * t);
@@ -77,11 +117,11 @@ public final class SpotifyWidget {
 		int coverX = x + PAD + 2;
 		int coverY = y + (HEIGHT - COVER) / 2;
 
-		ctx.fill(x, y, x + WIDTH, y + HEIGHT, bg);
+		fillShape(ctx, x, y, WIDTH, HEIGHT, cfg.shape, bg, 0);
 		if (cfg.glow && sp.status.isEmpty() && sp.running && sp.hasTrack) {
 			drawGlow(ctx, coverX, coverY, pack(cur[0], cur[1], cur[2]), sp.playing);
 		}
-		ctx.fill(x, y, x + 2, y + HEIGHT, accent); // accent stripe
+		fillShape(ctx, x, y, WIDTH, HEIGHT, cfg.shape, accent, 2); // accent stripe following the edge
 
 		int tx = x + PAD + 2;
 		int tw = WIDTH - PAD * 2 - 2;

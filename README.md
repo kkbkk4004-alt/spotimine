@@ -19,6 +19,8 @@ account, nothing leaves your PC.
 
 - Time bar: elapsed time, time left and total length. Click the bar in the J screen to correct the time.
 
+- Card shape: Square, Rounded, Pill or Cut corners (button in the J screen).
+
 ## Notes
 
 - Needs the Spotify **desktop app** (not the web player). The song is read from
