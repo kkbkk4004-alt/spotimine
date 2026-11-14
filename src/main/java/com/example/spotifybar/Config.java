@@ -17,6 +17,7 @@ public class Config {
 	public boolean visible = true;
 	/** RGB colors (no alpha). */
 	public boolean matchCover = true;
+	public boolean glow = true;
 	public int textColor = 0xFFFFFF;
 	public int accent = 0x1DB954;
 	public int background = 0x101010;

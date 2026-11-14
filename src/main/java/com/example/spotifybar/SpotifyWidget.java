@@ -67,7 +67,13 @@ public final class SpotifyWidget {
 		// secondary text (artist, "Paused"): the text color faded toward the background
 		int subC = 0xFF000000 | mix(cfg.textColor & 0xFFFFFF, bgRgb, 0.35f);
 
+		int coverX = x + PAD + 2;
+		int coverY = y + (HEIGHT - COVER) / 2;
+
 		ctx.fill(x, y, x + WIDTH, y + HEIGHT, bg);
+		if (cfg.glow && sp.status.isEmpty() && sp.running && sp.hasTrack) {
+			drawGlow(ctx, coverX, coverY, pack(cur[0], cur[1], cur[2]), sp.playing);
+		}
 		ctx.fill(x, y, x + 2, y + HEIGHT, accent); // accent stripe
 
 		int tx = x + PAD + 2;
@@ -75,23 +81,21 @@ public final class SpotifyWidget {
 
 		if (!sp.status.isEmpty()) {
 			ctx.drawText(tr, "Spotify", tx, y + 8, textC, false);
-			ctx.drawText(tr, trim(tr, sp.status, tw), tx, y + 20, subC, false);
+			ctx.drawText(tr, trim(tr, sp.status, tw, 0), tx, y + 20, subC, false);
 			return;
 		}
 		if (!sp.running) {
 			ctx.drawText(tr, "Spotify", tx, y + 8, textC, false);
-			ctx.drawText(tr, trim(tr, "Open the Spotify app", tw), tx, y + 20, subC, false);
+			ctx.drawText(tr, trim(tr, "Open the Spotify app", tw, 1), tx, y + 20, subC, false);
 			return;
 		}
 		if (!sp.hasTrack) {
 			ctx.drawText(tr, "Nothing playing", tx, y + 8, textC, false);
-			ctx.drawText(tr, trim(tr, "Press play in Spotify", tw), tx, y + 20, subC, false);
+			ctx.drawText(tr, trim(tr, "Press play in Spotify", tw, 2), tx, y + 20, subC, false);
 			return;
 		}
 
 		// cover (or a dark placeholder while it loads / when none was found)
-		int coverX = x + PAD + 2;
-		int coverY = y + (HEIGHT - COVER) / 2;
 		if (sp.coverTexture != null) {
 			var m = ctx.getMatrices();
 			m.push();
@@ -109,8 +113,8 @@ public final class SpotifyWidget {
 		int textX = coverX + COVER + 6;
 		int textW = x + WIDTH - PAD - textX;
 
-		ctx.drawText(tr, trim(tr, sp.title, textW), textX, y + 5, textC, false);
-		ctx.drawText(tr, trim(tr, sp.artist, textW), textX, y + 16, subC, false);
+		ctx.drawText(tr, trim(tr, sp.title, textW, 3), textX, y + 5, textC, false);
+		ctx.drawText(tr, trim(tr, sp.artist, textW, 4), textX, y + 16, subC, false);
 
 		ctx.getMatrices().push();
 		ctx.getMatrices().translate(textX, y + 27, 0);
@@ -119,6 +123,23 @@ public final class SpotifyWidget {
 		ctx.getMatrices().pop();
 
 		drawWaves(ctx, x + WIDTH - PAD - 6 * 4 + 2, y + HEIGHT - 5, sp.playing, accent, subC);
+	}
+
+	/**
+	 * Soft "LED" glow behind the cover in the cover's color. Stacked translucent
+	 * rectangles fade out from the cover's edge; the brightness pulses while playing.
+	 */
+	private static void drawGlow(DrawContext ctx, int cx, int cy, int rgb, boolean playing) {
+		long t = System.currentTimeMillis();
+		double pulse = playing
+				? 0.8 + 0.2 * Math.sin(t / 240.0) * (0.6 + 0.4 * Math.sin(t / 730.0))
+				: 0.45;
+		for (int i = 10; i >= 1; i--) {
+			float f = 1f - i / 11f;
+			int a = (int) (38 * pulse * f * f);
+			if (a <= 0) continue;
+			ctx.fill(cx - i, cy - i, cx + COVER + i, cy + COVER + i, (a << 24) | (rgb & 0xFFFFFF));
+		}
 	}
 
 	/** Animated equalizer bars. They dance while music plays and sit flat when paused. */
@@ -133,10 +154,22 @@ public final class SpotifyWidget {
 		}
 	}
 
-	private static String trim(TextRenderer tr, String s, int maxW) {
-		if (tr.getWidth(s) <= maxW) return s;
-		String ell = "...";
-		while (!s.isEmpty() && tr.getWidth(s + ell) > maxW) s = s.substring(0, s.length() - 1);
-		return s + ell;
+	// trimming text every frame is wasteful, so remember the last result per text slot
+	private static final String[] TRIM_SRC = new String[8];
+	private static final String[] TRIM_OUT = new String[8];
+	private static final int[] TRIM_W = new int[8];
+
+	private static String trim(TextRenderer tr, String s, int maxW, int slot) {
+		if (s.equals(TRIM_SRC[slot]) && TRIM_W[slot] == maxW) return TRIM_OUT[slot];
+		String out = s;
+		if (tr.getWidth(out) > maxW) {
+			String ell = "...";
+			while (!out.isEmpty() && tr.getWidth(out + ell) > maxW) out = out.substring(0, out.length() - 1);
+			out = out + ell;
+		}
+		TRIM_SRC[slot] = s;
+		TRIM_OUT[slot] = out;
+		TRIM_W[slot] = maxW;
+		return out;
 	}
 }

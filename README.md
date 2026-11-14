@@ -11,7 +11,8 @@ account, nothing leaves your PC.
 - Drag the card to move it. Position is saved.
 - The card shows the song's cover and (by default) matches its colors to it. Turn that off with the
   "Match cover colors" button, or just click a swatch to pick your own accent/background.
-- The text color has its own swatch row.
+- Colors: pick Accent / Background / Text with the tabs, then click one of 48 palette colors or type any hex color (like #FF8800).
+- A soft glow in the cover's color pulses behind the cover while music plays (toggle with the "Glow" button).
 - Buttons under the card: previous / play-pause / next (they send the Windows
   media keys, so they work like the keys on your keyboard).
 - Optional keybind (unbound by default) to hide/show the card.
@@ -20,8 +21,9 @@ account, nothing leaves your PC.
 
 - Needs the Spotify **desktop app** (not the web player). The song is read from
   the app's window title, which shows "Artist - Song" while playing.
-- The cover is found by song + artist name in Apple's free iTunes Search API (no key needed), so it
-  can occasionally be the wrong release, or missing for obscure tracks. No progress bar.
+- The cover is found by song + artist name in Deezer's free search API (Apple's iTunes Search is the
+  backup). A result is only used if its artist and title match, so a missing cover is preferred over a
+  wrong one. No keys or accounts needed. No progress bar.
 
 ## Build
 

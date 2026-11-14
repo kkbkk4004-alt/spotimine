@@ -3,29 +3,35 @@ package com.example.spotifybar;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 
 /**
  * Opened with the keybind (default J). Drag the card anywhere, use the
- * controls under it and pick its colors.
+ * controls under it and pick its colors (palette or any hex color).
  */
 public class SpotifyScreen extends Screen {
 	private static final int BTN_W = 30;
 	private static final int BTN_H = 16;
-	private static final int SW = 14;   // swatch size
+	private static final int SW = 14;    // swatch size
 	private static final int SW_GAP = 4;
+	private static final int COLS = 12;
+	private static final int ROWS = 4;
 
-	private static final int[] ACCENTS = {
-			0x1DB954, 0x3B82F6, 0xA855F7, 0xEC4899, 0xEF4444, 0xF97316, 0xFACC15, 0xFFFFFF
-	};
-	private static final int[] BACKGROUNDS = {
-			0x101010, 0x000000, 0x1E293B, 0x2E1065, 0x3B0A0A, 0x052E16, 0x422006, 0x4A4A4A
-	};
+	private static final int TAB_ACCENT = 0, TAB_BG = 1, TAB_TEXT = 2;
+	private static final String[] TAB_NAMES = {"Accent", "Background", "Text"};
+
+	private final int[] brightPalette = buildPalette(false);
+	private final int[] darkPalette = buildPalette(true);
+
+	private int tab = TAB_ACCENT;
+	private int top;
+	private boolean updatingField = false;
 
 	private ButtonWidget matchButton;
-	private static final int[] TEXTS = {
-			0xFFFFFF, 0xFACC15, 0x22D3EE, 0xF472B6, 0x86EFAC, 0xFDBA74, 0xC4B5FD, 0x000000
-	};
+	private ButtonWidget glowButton;
+	private final ButtonWidget[] tabButtons = new ButtonWidget[3];
+	private TextFieldWidget hexField;
 
 	private boolean dragging = false;
 	private int dragDX, dragDY;
@@ -34,10 +40,56 @@ public class SpotifyScreen extends Screen {
 		super(Text.literal("Spotify Bar"));
 	}
 
+	/** 12 columns of hues x 4 rows: vivid, soft, deep and grays (or dark tints for backgrounds). */
+	private static int[] buildPalette(boolean dark) {
+		int[] p = new int[COLS * ROWS];
+		float[][] rows = dark
+				? new float[][]{{0.7f, 0.12f}, {0.7f, 0.2f}, {0.6f, 0.3f}}
+				: new float[][]{{1f, 1f}, {0.45f, 1f}, {1f, 0.6f}};
+		for (int c = 0; c < COLS; c++) {
+			for (int r = 0; r < 3; r++) {
+				p[r * COLS + c] = SpotifyClient.hsvToRgb(c / (float) COLS, rows[r][0], rows[r][1]);
+			}
+			float v = c / (float) (COLS - 1) * (dark ? 0.35f : 1f); // grays
+			p[3 * COLS + c] = SpotifyClient.hsvToRgb(0f, 0f, v);
+		}
+		return p;
+	}
+
+	private int[] palette() {
+		return tab == TAB_BG ? darkPalette : brightPalette;
+	}
+
+	private int currentColor() {
+		Config cfg = Config.get();
+		return switch (tab) {
+			case TAB_BG -> cfg.background;
+			case TAB_TEXT -> cfg.textColor;
+			default -> cfg.accent;
+		} & 0xFFFFFF;
+	}
+
+	private void setColor(int rgb) {
+		Config cfg = Config.get();
+		rgb &= 0xFFFFFF;
+		switch (tab) {
+			case TAB_BG -> { cfg.background = rgb; cfg.matchCover = false; }
+			case TAB_TEXT -> cfg.textColor = rgb;
+			default -> { cfg.accent = rgb; cfg.matchCover = false; }
+		}
+		cfg.save();
+	}
+
+	private void refreshHexField() {
+		updatingField = true;
+		hexField.setText(String.format("#%06X", currentColor()));
+		updatingField = false;
+	}
+
 	@Override
 	protected void init() {
 		int cx = this.width / 2;
-		int top = this.height / 2 + 10;
+		top = Math.min(this.height / 2 + 10, this.height - 180);
 
 		addDrawableChild(ButtonWidget.builder(Text.literal("Hide / show bar"), b -> {
 			Config.get().visible = !Config.get().visible;
@@ -47,28 +99,51 @@ public class SpotifyScreen extends Screen {
 		addDrawableChild(ButtonWidget.builder(Text.literal("Done"), b -> close())
 				.dimensions(cx + 2, top, 118, 20).build());
 
-		matchButton = ButtonWidget.builder(Text.literal("Match cover colors"), b -> {
+		matchButton = ButtonWidget.builder(Text.literal("Match cover"), b -> {
 			Config.get().matchCover = !Config.get().matchCover;
 			Config.get().save();
-		}).dimensions(cx - 120, top + 24, 240, 20).build();
+		}).dimensions(cx - 120, top + 24, 118, 20).build();
 		addDrawableChild(matchButton);
+
+		glowButton = ButtonWidget.builder(Text.literal("Cover glow"), b -> {
+			Config.get().glow = !Config.get().glow;
+			Config.get().save();
+		}).dimensions(cx + 2, top + 24, 118, 20).build();
+		addDrawableChild(glowButton);
+
+		for (int i = 0; i < 3; i++) {
+			final int idx = i;
+			tabButtons[i] = ButtonWidget.builder(Text.literal(TAB_NAMES[i]), b -> {
+				tab = idx;
+				refreshHexField();
+			}).dimensions(cx - 119 + i * 80, top + 48, 78, 18).build();
+			addDrawableChild(tabButtons[i]);
+		}
+
+		hexField = new TextFieldWidget(this.textRenderer, cx - 40, top + 72 + ROWS * (SW + SW_GAP) + 4,
+				80, 18, Text.literal("Hex"));
+		hexField.setMaxLength(7);
+		hexField.setPlaceholder(Text.literal("#RRGGBB"));
+		hexField.setChangedListener(s -> {
+			if (updatingField) return;
+			String h = s.startsWith("#") ? s.substring(1) : s;
+			if (h.length() != 6) return;
+			try {
+				setColor(Integer.parseInt(h, 16));
+			} catch (NumberFormatException ignored) {
+				// not a valid hex color yet
+			}
+		});
+		addDrawableChild(hexField);
+		refreshHexField();
 	}
 
-	// swatch rows are centered under the buttons
-	private int rowX(int count) {
-		return this.width / 2 - (count * SW + (count - 1) * SW_GAP) / 2;
+	private int gridX() {
+		return this.width / 2 - (COLS * SW + (COLS - 1) * SW_GAP) / 2;
 	}
 
-	private int accentRowY() {
-		return this.height / 2 + 10 + 60;
-	}
-
-	private int bgRowY() {
-		return this.height / 2 + 10 + 86;
-	}
-
-	private int textRowY() {
-		return this.height / 2 + 10 + 112;
+	private int gridY() {
+		return top + 72;
 	}
 
 	@Override
@@ -78,7 +153,10 @@ public class SpotifyScreen extends Screen {
 		SpotifyClient sp = SpotifyBarClient.spotify;
 		Config cfg = Config.get();
 		clamp(cfg);
-		matchButton.setMessage(Text.literal("Match cover colors: " + (cfg.matchCover ? "ON" : "OFF")));
+		matchButton.setMessage(Text.literal("Match cover: " + (cfg.matchCover ? "ON" : "OFF")));
+		glowButton.setMessage(Text.literal("Glow: " + (cfg.glow ? "ON" : "OFF")));
+		for (int i = 0; i < 3; i++) tabButtons[i].active = i != tab;
+
 		SpotifyWidget.draw(ctx, cfg.x, cfg.y);
 
 		if (sp.running) {
@@ -91,29 +169,26 @@ public class SpotifyScreen extends Screen {
 		}
 
 		ctx.drawCenteredTextWithShadow(this.textRenderer,
-				"Drag the card to move it", this.width / 2, this.height / 2 - 10, 0xFFFFFFFF);
+				"Drag the card to move it", this.width / 2, top - 14, 0xFFFFFFFF);
 
-		// color pickers
-		ctx.drawCenteredTextWithShadow(this.textRenderer, "Accent color",
-				this.width / 2, accentRowY() - 11, 0xFFFFFFFF);
-		drawSwatches(ctx, ACCENTS, rowX(ACCENTS.length), accentRowY(), cfg.accent);
-		ctx.drawCenteredTextWithShadow(this.textRenderer, "Background color",
-				this.width / 2, bgRowY() - 11, 0xFFFFFFFF);
-		drawSwatches(ctx, BACKGROUNDS, rowX(BACKGROUNDS.length), bgRowY(), cfg.background);
-		ctx.drawCenteredTextWithShadow(this.textRenderer, "Text color",
-				this.width / 2, textRowY() - 11, 0xFFFFFFFF);
-		drawSwatches(ctx, TEXTS, rowX(TEXTS.length), textRowY(), cfg.textColor);
+		// palette grid
+		int[] pal = palette();
+		int cur = currentColor();
+		for (int i = 0; i < pal.length; i++) {
+			int sx = gridX() + (i % COLS) * (SW + SW_GAP);
+			int sy = gridY() + (i / COLS) * (SW + SW_GAP);
+			boolean sel = (pal[i] & 0xFFFFFF) == cur;
+			ctx.fill(sx - 1, sy - 1, sx + SW + 1, sy + SW + 1, sel ? 0xFFFFFFFF : 0xFF000000);
+			ctx.fill(sx, sy, sx + SW, sy + SW, 0xFF000000 | pal[i]);
+		}
+
+		// preview of the color being edited, left of the hex field
+		int px = this.width / 2 - 40 - SW - 6;
+		int py = gridY() + ROWS * (SW + SW_GAP) + 6;
+		ctx.fill(px - 1, py - 1, px + SW + 1, py + SW + 1, 0xFFFFFFFF);
+		ctx.fill(px, py, px + SW, py + SW, 0xFF000000 | cur);
 
 		super.render(ctx, mouseX, mouseY, delta);
-	}
-
-	private void drawSwatches(DrawContext ctx, int[] colors, int x, int y, int selected) {
-		for (int i = 0; i < colors.length; i++) {
-			int sx = x + i * (SW + SW_GAP);
-			boolean sel = (colors[i] & 0xFFFFFF) == (selected & 0xFFFFFF);
-			ctx.fill(sx - 1, y - 1, sx + SW + 1, y + SW + 1, sel ? 0xFFFFFFFF : 0xFF000000);
-			ctx.fill(sx, y, sx + SW, y + SW, 0xFF000000 | colors[i]);
-		}
 	}
 
 	private int controlsX(Config cfg) {
@@ -127,15 +202,6 @@ public class SpotifyScreen extends Screen {
 		ctx.drawCenteredTextWithShadow(this.textRenderer, label, x + BTN_W / 2, y + 4, 0xFFFFFFFF);
 	}
 
-	private int swatchAt(int[] colors, int x, int y, double mx, double my) {
-		if (my < y || my >= y + SW) return -1;
-		for (int i = 0; i < colors.length; i++) {
-			int sx = x + i * (SW + SW_GAP);
-			if (mx >= sx && mx < sx + SW) return i;
-		}
-		return -1;
-	}
-
 	@Override
 	public boolean mouseClicked(double mx, double my, int button) {
 		if (super.mouseClicked(mx, my, button)) return true;
@@ -144,26 +210,16 @@ public class SpotifyScreen extends Screen {
 		Config cfg = Config.get();
 		SpotifyClient sp = SpotifyBarClient.spotify;
 
-		int a = swatchAt(ACCENTS, rowX(ACCENTS.length), accentRowY(), mx, my);
-		if (a >= 0) {
-			cfg.accent = ACCENTS[a];
-			cfg.matchCover = false; // picking a color yourself turns cover matching off
-			cfg.save();
-			return true;
-		}
-		int b = swatchAt(BACKGROUNDS, rowX(BACKGROUNDS.length), bgRowY(), mx, my);
-		if (b >= 0) {
-			cfg.background = BACKGROUNDS[b];
-			cfg.matchCover = false;
-			cfg.save();
-			return true;
-		}
-
-		int t = swatchAt(TEXTS, rowX(TEXTS.length), textRowY(), mx, my);
-		if (t >= 0) {
-			cfg.textColor = TEXTS[t];
-			cfg.save();
-			return true;
+		// palette grid
+		int gx = (int) mx - gridX();
+		int gy = (int) my - gridY();
+		if (gx >= 0 && gy >= 0) {
+			int col = gx / (SW + SW_GAP), row = gy / (SW + SW_GAP);
+			if (col < COLS && row < ROWS && gx % (SW + SW_GAP) < SW && gy % (SW + SW_GAP) < SW) {
+				setColor(palette()[row * COLS + col]);
+				refreshHexField();
+				return true;
+			}
 		}
 
 		if (sp.running) {
