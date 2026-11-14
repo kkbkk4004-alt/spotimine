@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "spotifybar",
+  "version": "${version}",
+  "name": "Spotify Bar",
+  "description": "Shows the song you are playing on Spotify as a movable widget on your screen.",
+  "authors": [],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.example.spotifybar.SpotifyBarClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "1.21.4",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
