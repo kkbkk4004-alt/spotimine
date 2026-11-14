@@ -16,6 +16,8 @@ public class Config {
 	public int y = 6;
 	public boolean visible = true;
 	/** RGB colors (no alpha). */
+	public boolean matchCover = true;
+	public int textColor = 0xFFFFFF;
 	public int accent = 0x1DB954;
 	public int background = 0x101010;
 
