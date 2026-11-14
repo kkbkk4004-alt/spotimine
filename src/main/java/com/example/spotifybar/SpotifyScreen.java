@@ -6,12 +6,21 @@ import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
 
 /**
- * Opened with the keybind (default J). Drag the card anywhere and use the
- * controls under it.
+ * Opened with the keybind (default J). Drag the card anywhere, use the
+ * controls under it and pick its colors.
  */
 public class SpotifyScreen extends Screen {
 	private static final int BTN_W = 30;
 	private static final int BTN_H = 16;
+	private static final int SW = 14;   // swatch size
+	private static final int SW_GAP = 4;
+
+	private static final int[] ACCENTS = {
+			0x1DB954, 0x3B82F6, 0xA855F7, 0xEC4899, 0xEF4444, 0xF97316, 0xFACC15, 0xFFFFFF
+	};
+	private static final int[] BACKGROUNDS = {
+			0x101010, 0x000000, 0x1E293B, 0x2E1065, 0x3B0A0A, 0x052E16, 0x422006, 0x4A4A4A
+	};
 
 	private boolean dragging = false;
 	private int dragDX, dragDY;
@@ -34,6 +43,19 @@ public class SpotifyScreen extends Screen {
 				.dimensions(cx + 2, top, 118, 20).build());
 	}
 
+	// swatch rows are centered under the buttons
+	private int rowX(int count) {
+		return this.width / 2 - (count * SW + (count - 1) * SW_GAP) / 2;
+	}
+
+	private int accentRowY() {
+		return this.height / 2 + 10 + 38;
+	}
+
+	private int bgRowY() {
+		return this.height / 2 + 10 + 72;
+	}
+
 	@Override
 	public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
 		ctx.fill(0, 0, this.width, this.height, 0x66000000);
@@ -46,15 +68,33 @@ public class SpotifyScreen extends Screen {
 		if (sp.running) {
 			int cy = cfg.y + SpotifyWidget.HEIGHT + 3;
 			int bx = controlsX(cfg);
-			drawButton(ctx, bx, cy, "|<", mouseX, mouseY);
-			drawButton(ctx, bx + BTN_W + 2, cy, sp.playing ? "||" : ">", mouseX, mouseY);
-			drawButton(ctx, bx + (BTN_W + 2) * 2, cy, ">|", mouseX, mouseY);
+			int accent = 0xFF000000 | cfg.accent;
+			drawButton(ctx, bx, cy, "|<", mouseX, mouseY, accent);
+			drawButton(ctx, bx + BTN_W + 2, cy, sp.playing ? "||" : ">", mouseX, mouseY, accent);
+			drawButton(ctx, bx + (BTN_W + 2) * 2, cy, ">|", mouseX, mouseY, accent);
 		}
 
 		ctx.drawCenteredTextWithShadow(this.textRenderer,
 				"Drag the card to move it", this.width / 2, this.height / 2 - 10, 0xFFFFFFFF);
 
+		// color pickers
+		ctx.drawCenteredTextWithShadow(this.textRenderer, "Accent color",
+				this.width / 2, accentRowY() - 11, 0xFFFFFFFF);
+		drawSwatches(ctx, ACCENTS, rowX(ACCENTS.length), accentRowY(), cfg.accent);
+		ctx.drawCenteredTextWithShadow(this.textRenderer, "Background color",
+				this.width / 2, bgRowY() - 11, 0xFFFFFFFF);
+		drawSwatches(ctx, BACKGROUNDS, rowX(BACKGROUNDS.length), bgRowY(), cfg.background);
+
 		super.render(ctx, mouseX, mouseY, delta);
+	}
+
+	private void drawSwatches(DrawContext ctx, int[] colors, int x, int y, int selected) {
+		for (int i = 0; i < colors.length; i++) {
+			int sx = x + i * (SW + SW_GAP);
+			boolean sel = (colors[i] & 0xFFFFFF) == (selected & 0xFFFFFF);
+			ctx.fill(sx - 1, y - 1, sx + SW + 1, y + SW + 1, sel ? 0xFFFFFFFF : 0xFF000000);
+			ctx.fill(sx, y, sx + SW, y + SW, 0xFF000000 | colors[i]);
+		}
 	}
 
 	private int controlsX(Config cfg) {
@@ -62,10 +102,19 @@ public class SpotifyScreen extends Screen {
 		return cfg.x + (SpotifyWidget.WIDTH - total) / 2;
 	}
 
-	private void drawButton(DrawContext ctx, int x, int y, String label, int mx, int my) {
+	private void drawButton(DrawContext ctx, int x, int y, String label, int mx, int my, int accent) {
 		boolean hover = mx >= x && mx < x + BTN_W && my >= y && my < y + BTN_H;
-		ctx.fill(x, y, x + BTN_W, y + BTN_H, hover ? 0xFF1DB954 : 0xFF2A2A2A);
+		ctx.fill(x, y, x + BTN_W, y + BTN_H, hover ? accent : 0xFF2A2A2A);
 		ctx.drawCenteredTextWithShadow(this.textRenderer, label, x + BTN_W / 2, y + 4, 0xFFFFFFFF);
+	}
+
+	private int swatchAt(int[] colors, int x, int y, double mx, double my) {
+		if (my < y || my >= y + SW) return -1;
+		for (int i = 0; i < colors.length; i++) {
+			int sx = x + i * (SW + SW_GAP);
+			if (mx >= sx && mx < sx + SW) return i;
+		}
+		return -1;
 	}
 
 	@Override
@@ -75,6 +124,19 @@ public class SpotifyScreen extends Screen {
 
 		Config cfg = Config.get();
 		SpotifyClient sp = SpotifyBarClient.spotify;
+
+		int a = swatchAt(ACCENTS, rowX(ACCENTS.length), accentRowY(), mx, my);
+		if (a >= 0) {
+			cfg.accent = ACCENTS[a];
+			cfg.save();
+			return true;
+		}
+		int b = swatchAt(BACKGROUNDS, rowX(BACKGROUNDS.length), bgRowY(), mx, my);
+		if (b >= 0) {
+			cfg.background = BACKGROUNDS[b];
+			cfg.save();
+			return true;
+		}
 
 		if (sp.running) {
 			int cy = cfg.y + SpotifyWidget.HEIGHT + 3;

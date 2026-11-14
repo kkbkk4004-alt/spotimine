@@ -10,8 +10,6 @@ public final class SpotifyWidget {
 	public static final int HEIGHT = 40;
 	private static final int PAD = 6;
 
-	private static final int BG = 0xB0101010;
-	private static final int GREEN = 0xFF1DB954;
 	private static final int WHITE = 0xFFFFFFFF;
 	private static final int GRAY = 0xFFB3B3B3;
 
@@ -20,9 +18,12 @@ public final class SpotifyWidget {
 	public static void draw(DrawContext ctx, int x, int y) {
 		TextRenderer tr = MinecraftClient.getInstance().textRenderer;
 		SpotifyClient sp = SpotifyBarClient.spotify;
+		Config cfg = Config.get();
+		int accent = 0xFF000000 | (cfg.accent & 0xFFFFFF);
+		int bg = 0xB0000000 | (cfg.background & 0xFFFFFF);
 
-		ctx.fill(x, y, x + WIDTH, y + HEIGHT, BG);
-		ctx.fill(x, y, x + 2, y + HEIGHT, GREEN); // accent stripe
+		ctx.fill(x, y, x + WIDTH, y + HEIGHT, bg);
+		ctx.fill(x, y, x + 2, y + HEIGHT, accent); // accent stripe
 
 		int tx = x + PAD + 2;
 		int tw = WIDTH - PAD * 2 - 2;
@@ -49,21 +50,21 @@ public final class SpotifyWidget {
 		ctx.getMatrices().push();
 		ctx.getMatrices().translate(tx, y + 27, 0);
 		ctx.getMatrices().scale(0.75f, 0.75f, 1f);
-		ctx.drawText(tr, sp.playing ? "Now playing" : "Paused", 0, 0, sp.playing ? GREEN : GRAY, false);
+		ctx.drawText(tr, sp.playing ? "Now playing" : "Paused", 0, 0, sp.playing ? accent : GRAY, false);
 		ctx.getMatrices().pop();
 
-		drawWaves(ctx, x + WIDTH - PAD - 6 * 4 + 2, y + HEIGHT - 5, sp.playing);
+		drawWaves(ctx, x + WIDTH - PAD - 6 * 4 + 2, y + HEIGHT - 5, sp.playing, accent);
 	}
 
 	/** Animated equalizer bars. They dance while music plays and sit flat when paused. */
-	private static void drawWaves(DrawContext ctx, int x, int baseY, boolean playing) {
+	private static void drawWaves(DrawContext ctx, int x, int baseY, boolean playing, int accent) {
 		long t = System.currentTimeMillis();
 		for (int i = 0; i < 6; i++) {
 			double h = playing
 					? 0.2 + 0.8 * Math.abs(Math.sin(t / 170.0 + i * 1.7) * Math.cos(t / 290.0 + i * 0.9))
 					: 0.12;
 			int hh = Math.max(1, (int) (11 * h));
-			ctx.fill(x + i * 4, baseY - hh, x + i * 4 + 2, baseY, playing ? GREEN : GRAY);
+			ctx.fill(x + i * 4, baseY - hh, x + i * 4 + 2, baseY, playing ? accent : GRAY);
 		}
 	}
 

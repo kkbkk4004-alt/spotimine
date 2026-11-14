@@ -15,6 +15,9 @@ public class Config {
 	public int x = 6;
 	public int y = 6;
 	public boolean visible = true;
+	/** RGB colors (no alpha). */
+	public int accent = 0x1DB954;
+	public int background = 0x101010;
 
 	private static Config instance;
 
