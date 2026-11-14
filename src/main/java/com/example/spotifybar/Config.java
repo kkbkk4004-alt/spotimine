@@ -12,9 +12,6 @@ public class Config {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 	private static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve("spotifybar.json");
 
-	public String clientId = "";
-	/** Lets you stay logged in between launches. Treat it like a password. */
-	public String refreshToken = "";
 	public int x = 6;
 	public int y = 6;
 	public boolean visible = true;

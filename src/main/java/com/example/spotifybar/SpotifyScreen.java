@@ -1,15 +1,13 @@
 package com.example.spotifybar;
 
-import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 
 /**
- * Opened with the keybind (default J). Drag the card anywhere, use the
- * controls under it, paste your Client ID and log in.
+ * Opened with the keybind (default J). Drag the card anywhere and use the
+ * controls under it.
  */
 public class SpotifyScreen extends Screen {
 	private static final int BTN_W = 30;
@@ -17,10 +15,6 @@ public class SpotifyScreen extends Screen {
 
 	private boolean dragging = false;
 	private int dragDX, dragDY;
-
-	private TextFieldWidget clientIdField;
-	private ButtonWidget loginButton;
-	private ButtonWidget logoutButton;
 
 	public SpotifyScreen() {
 		super(Text.literal("Spotify Bar"));
@@ -31,31 +25,13 @@ public class SpotifyScreen extends Screen {
 		int cx = this.width / 2;
 		int top = this.height / 2 + 10;
 
-		clientIdField = new TextFieldWidget(this.textRenderer, cx - 120, top, 240, 18, Text.literal("Client ID"));
-		clientIdField.setMaxLength(64);
-		clientIdField.setPlaceholder(Text.literal("Paste your Spotify Client ID here"));
-		clientIdField.setText(Config.get().clientId);
-		clientIdField.setChangedListener(s -> {
-			Config.get().clientId = s.trim();
-			Config.get().save();
-		});
-		addDrawableChild(clientIdField);
-
-		loginButton = ButtonWidget.builder(Text.literal("Log in with Spotify"), b -> SpotifyBarClient.spotify.login())
-				.dimensions(cx - 120, top + 24, 118, 20).build();
-		addDrawableChild(loginButton);
-
-		logoutButton = ButtonWidget.builder(Text.literal("Log out"), b -> SpotifyBarClient.spotify.logout())
-				.dimensions(cx + 2, top + 24, 118, 20).build();
-		addDrawableChild(logoutButton);
-
 		addDrawableChild(ButtonWidget.builder(Text.literal("Hide / show bar"), b -> {
 			Config.get().visible = !Config.get().visible;
 			Config.get().save();
-		}).dimensions(cx - 120, top + 48, 118, 20).build());
+		}).dimensions(cx - 120, top, 118, 20).build());
 
 		addDrawableChild(ButtonWidget.builder(Text.literal("Done"), b -> close())
-				.dimensions(cx + 2, top + 48, 118, 20).build());
+				.dimensions(cx + 2, top, 118, 20).build());
 	}
 
 	@Override
@@ -63,19 +39,13 @@ public class SpotifyScreen extends Screen {
 		ctx.fill(0, 0, this.width, this.height, 0x66000000);
 
 		SpotifyClient sp = SpotifyBarClient.spotify;
-		loginButton.active = !sp.loggedIn && !sp.loggingIn;
-		logoutButton.active = sp.loggedIn;
-		clientIdField.setEditable(!sp.loggedIn);
-
 		Config cfg = Config.get();
 		clamp(cfg);
 		SpotifyWidget.draw(ctx, cfg.x, cfg.y);
 
-		// controls under the card
-		if (sp.loggedIn && sp.hasTrack) {
+		if (sp.running) {
 			int cy = cfg.y + SpotifyWidget.HEIGHT + 3;
-			int total = BTN_W * 3 + 4;
-			int bx = cfg.x + (SpotifyWidget.WIDTH - total) / 2;
+			int bx = controlsX(cfg);
 			drawButton(ctx, bx, cy, "|<", mouseX, mouseY);
 			drawButton(ctx, bx + BTN_W + 2, cy, sp.playing ? "||" : ">", mouseX, mouseY);
 			drawButton(ctx, bx + (BTN_W + 2) * 2, cy, ">|", mouseX, mouseY);
@@ -83,12 +53,13 @@ public class SpotifyScreen extends Screen {
 
 		ctx.drawCenteredTextWithShadow(this.textRenderer,
 				"Drag the card to move it", this.width / 2, this.height / 2 - 10, 0xFFFFFFFF);
-		if (!sp.status.isEmpty()) {
-			ctx.drawCenteredTextWithShadow(this.textRenderer, sp.status,
-					this.width / 2, this.height / 2 + 82, 0xFFFFAA55);
-		}
 
 		super.render(ctx, mouseX, mouseY, delta);
+	}
+
+	private int controlsX(Config cfg) {
+		int total = BTN_W * 3 + 4;
+		return cfg.x + (SpotifyWidget.WIDTH - total) / 2;
 	}
 
 	private void drawButton(DrawContext ctx, int x, int y, String label, int mx, int my) {
@@ -105,10 +76,9 @@ public class SpotifyScreen extends Screen {
 		Config cfg = Config.get();
 		SpotifyClient sp = SpotifyBarClient.spotify;
 
-		if (sp.loggedIn && sp.hasTrack) {
+		if (sp.running) {
 			int cy = cfg.y + SpotifyWidget.HEIGHT + 3;
-			int total = BTN_W * 3 + 4;
-			int bx = cfg.x + (SpotifyWidget.WIDTH - total) / 2;
+			int bx = controlsX(cfg);
 			if (my >= cy && my < cy + BTN_H) {
 				if (mx >= bx && mx < bx + BTN_W) { sp.previous(); return true; }
 				if (mx >= bx + BTN_W + 2 && mx < bx + BTN_W * 2 + 2) { sp.togglePlay(); return true; }
