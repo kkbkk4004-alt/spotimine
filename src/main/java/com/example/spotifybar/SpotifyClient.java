@@ -258,7 +258,11 @@ public class SpotifyClient {
 			return;
 		}
 		if (code == 403) {
-			status = "Spotify refused access (403). See README.";
+						String body = c.getErrorStream() != null ? read(c.getErrorStream()) : "";
+			SpotifyBarClient.LOGGER.warn("Spotify 403: {}", body);
+			java.util.regex.Matcher m = java.util.regex.Pattern
+					.compile("\"message\"\\s*:\\s*\"([^\"]*)\"").matcher(body);
+			status = "403: " + (m.find() ? m.group(1) : body);
 			return;
 		}
 		if (code != 200) return;
@@ -292,7 +296,7 @@ public class SpotifyClient {
 		artist = artists.toString();
 		playing = root.has("is_playing") && root.get("is_playing").getAsBoolean();
 		hasTrack = true;
-		if (status.startsWith("Spotify refused")) status = "";
+		if (status.startsWith("403")) status = "";
 
 		if (artUrl != null && !artUrl.equals(currentArtUrl)) {
 			currentArtUrl = artUrl;
