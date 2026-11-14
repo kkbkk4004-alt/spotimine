@@ -8,18 +8,26 @@ import net.minecraft.client.render.RenderLayer;
 /** Draws the now-playing card. Shared by the HUD and the edit screen. */
 public final class SpotifyWidget {
 	public static final int WIDTH = 170;
-	public static final int HEIGHT = 40;
+	public static final int HEIGHT = 46;
 	private static final int PAD = 6;
 	private static final int COVER = 32;
+	private static final int BAR_Y = 31;     // progress bar, relative to the card top
+	private static final int WAVES_W = 22;
 
 	/** Colors currently on screen {accent rgb, background rgb}; they slide toward the target. */
 	private static float[] cur = null;
 
 	private SpotifyWidget() {}
 
-	/** Accent/background actually being drawn right now (RGB, no alpha). */
+	/** Accent actually being drawn right now (RGB, no alpha). */
 	public static int accentNow() {
 		return cur == null ? Config.get().accent : pack(cur[0], cur[1], cur[2]);
+	}
+
+	/** Progress bar rectangle {x, y, width} for a card drawn at (x, y). */
+	public static int[] barRect(int x, int y) {
+		int textX = x + PAD + 2 + COVER + 6;
+		return new int[]{textX, y + BAR_Y, x + WIDTH - PAD - textX};
 	}
 
 	private static int mix(int a, int b, float t) {
@@ -60,11 +68,10 @@ public final class SpotifyWidget {
 
 		updateColors(cfg, sp);
 		int accent = 0xFF000000 | pack(cur[0], cur[1], cur[2]);
-		int bg = 0xB0000000 | pack(cur[3], cur[4], cur[5]);
-
 		int bgRgb = pack(cur[3], cur[4], cur[5]);
+		int bg = 0xB0000000 | bgRgb;
 		int textC = 0xFF000000 | (cfg.textColor & 0xFFFFFF);
-		// secondary text (artist, "Paused"): the text color faded toward the background
+		// secondary text (artist, times): the text color faded toward the background
 		int subC = 0xFF000000 | mix(cfg.textColor & 0xFFFFFF, bgRgb, 0.35f);
 
 		int coverX = x + PAD + 2;
@@ -80,18 +87,18 @@ public final class SpotifyWidget {
 		int tw = WIDTH - PAD * 2 - 2;
 
 		if (!sp.status.isEmpty()) {
-			ctx.drawText(tr, "Spotify", tx, y + 8, textC, false);
-			ctx.drawText(tr, trim(tr, sp.status, tw, 0), tx, y + 20, subC, false);
+			ctx.drawText(tr, "Spotify", tx, y + 12, textC, false);
+			ctx.drawText(tr, trim(tr, sp.status, tw, 0), tx, y + 24, subC, false);
 			return;
 		}
 		if (!sp.running) {
-			ctx.drawText(tr, "Spotify", tx, y + 8, textC, false);
-			ctx.drawText(tr, trim(tr, "Open the Spotify app", tw, 1), tx, y + 20, subC, false);
+			ctx.drawText(tr, "Spotify", tx, y + 12, textC, false);
+			ctx.drawText(tr, trim(tr, "Open the Spotify app", tw, 1), tx, y + 24, subC, false);
 			return;
 		}
 		if (!sp.hasTrack) {
-			ctx.drawText(tr, "Nothing playing", tx, y + 8, textC, false);
-			ctx.drawText(tr, trim(tr, "Press play in Spotify", tw, 2), tx, y + 20, subC, false);
+			ctx.drawText(tr, "Nothing playing", tx, y + 12, textC, false);
+			ctx.drawText(tr, trim(tr, "Press play in Spotify", tw, 2), tx, y + 24, subC, false);
 			return;
 		}
 
@@ -114,15 +121,40 @@ public final class SpotifyWidget {
 		int textW = x + WIDTH - PAD - textX;
 
 		ctx.drawText(tr, trim(tr, sp.title, textW, 3), textX, y + 5, textC, false);
-		ctx.drawText(tr, trim(tr, sp.artist, textW, 4), textX, y + 16, subC, false);
+		ctx.drawText(tr, trim(tr, sp.artist, textW - WAVES_W - 4, 4), textX, y + 16, subC, false);
 
-		ctx.getMatrices().push();
-		ctx.getMatrices().translate(textX, y + 27, 0);
-		ctx.getMatrices().scale(0.75f, 0.75f, 1f);
-		ctx.drawText(tr, sp.playing ? "Now playing" : "Paused", 0, 0, sp.playing ? accent : subC, false);
-		ctx.getMatrices().pop();
+		drawWaves(ctx, x + WIDTH - PAD - WAVES_W, y + 27, sp.playing, accent, subC);
 
-		drawWaves(ctx, x + WIDTH - PAD - 6 * 4 + 2, y + HEIGHT - 5, sp.playing, accent, subC);
+		// progress bar + times
+		long dur = sp.durationMs;
+		long pos = sp.positionMs();
+		int barY = y + BAR_Y;
+		ctx.fill(textX, barY, textX + textW, barY + 3, 0x55000000 | (subC & 0xFFFFFF));
+		if (dur > 0) {
+			int filled = (int) (textW * Math.min(1.0, pos / (double) dur));
+			ctx.fill(textX, barY, textX + filled, barY + 3, accent);
+			ctx.fill(textX + Math.max(0, filled - 1), barY - 1, textX + filled + 1, barY + 4, textC); // knob
+		}
+
+		String left = fmt(pos);
+		String mid = dur > 0 ? "-" + fmt(Math.max(0, dur - pos)) : "";
+		String right = dur > 0 ? fmt(dur) : "--:--";
+		float sc = 0.75f;
+		int innerW = (int) (textW / sc);
+		var m = ctx.getMatrices();
+		m.push();
+		m.translate(textX, barY + 6, 0);
+		m.scale(sc, sc, 1f);
+		ctx.drawText(tr, left, 0, 0, textC, false);
+		if (!mid.isEmpty()) ctx.drawText(tr, mid, (innerW - tr.getWidth(mid)) / 2, 0, subC, false);
+		ctx.drawText(tr, right, innerW - tr.getWidth(right), 0, subC, false);
+		m.pop();
+	}
+
+	private static String fmt(long ms) {
+		long sec = Math.max(0, ms / 1000);
+		long h = sec / 3600, m = (sec / 60) % 60, s = sec % 60;
+		return h > 0 ? String.format("%d:%02d:%02d", h, m, s) : String.format("%d:%02d", sec / 60, s);
 	}
 
 	/**

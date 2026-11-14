@@ -169,7 +169,7 @@ public class SpotifyScreen extends Screen {
 		}
 
 		ctx.drawCenteredTextWithShadow(this.textRenderer,
-				"Drag the card to move it", this.width / 2, top - 14, 0xFFFFFFFF);
+				"Drag the card to move it. Click its time bar to sync the time.", this.width / 2, top - 14, 0xFFFFFFFF);
 
 		// palette grid
 		int[] pal = palette();
@@ -218,6 +218,15 @@ public class SpotifyScreen extends Screen {
 			if (col < COLS && row < ROWS && gx % (SW + SW_GAP) < SW && gy % (SW + SW_GAP) < SW) {
 				setColor(palette()[row * COLS + col]);
 				refreshHexField();
+				return true;
+			}
+		}
+
+		// click the time bar to correct the elapsed time
+		if (sp.running && sp.hasTrack && sp.durationMs > 0) {
+			int[] bar = SpotifyWidget.barRect(cfg.x, cfg.y);
+			if (mx >= bar[0] && mx <= bar[0] + bar[2] && my >= bar[1] - 4 && my <= bar[1] + 7) {
+				sp.seekTo((long) ((mx - bar[0]) / bar[2] * sp.durationMs));
 				return true;
 			}
 		}

@@ -17,6 +17,8 @@ account, nothing leaves your PC.
   media keys, so they work like the keys on your keyboard).
 - Optional keybind (unbound by default) to hide/show the card.
 
+- Time bar: elapsed time, time left and total length. Click the bar in the J screen to correct the time.
+
 ## Notes
 
 - Needs the Spotify **desktop app** (not the web player). The song is read from
@@ -29,3 +31,7 @@ account, nothing leaves your PC.
 
 Push to GitHub; the Actions workflow builds the jar (artifact `spotify-bar-jar`).
 Needs Fabric API for 1.21.4.
+
+- The song length comes from Deezer/iTunes. Spotify doesn't share its playback position with free mods,
+  so the elapsed time is counted by the mod from when it sees the song start. If you start the game
+  mid-song or seek in Spotify, click the bar in the J screen to re-sync.

@@ -47,7 +47,10 @@ public class SpotifyClient {
 	private static final boolean WINDOWS = System.getProperty("os.name", "").toLowerCase().contains("win");
 
 	/** A finished cover: 64x64 pixels plus the colors taken from it. */
-	private record Cover(int[] argb, int accent, int bg) {}
+	private record Cover(int[] argb, int accent, int bg, long durationMs) {}
+
+	/** A search result: cover url (may be null) and the song length. */
+	private record Hit(String coverUrl, long durationMs) {}
 
 	// ---- state read by the UI ----
 	/** Is the Spotify desktop app running? */
@@ -57,6 +60,12 @@ public class SpotifyClient {
 	public volatile String title = "";
 	public volatile String artist = "";
 	public volatile String status = "";
+	/** Song length in ms from the music catalog, 0 if unknown. */
+	public volatile long durationMs = 0;
+
+	// Elapsed time is counted by the mod itself (Spotify's position isn't available without its API).
+	private long baseMs = 0;
+	private long resumedAtNanos = 0;
 
 	/** Cover texture once loaded (null while loading / not found). */
 	public volatile Identifier coverTexture = null;
@@ -102,7 +111,7 @@ public class SpotifyClient {
 		String raw = findSpotifyTitle();
 		if (raw == null) {
 			running = false;
-			playing = false;
+			setPlaying(false);
 			hasTrack = false;
 			pidCache.clear();
 			return;
@@ -115,7 +124,7 @@ public class SpotifyClient {
 				|| t.matches("(?i)spotify (free|premium|standalone).*")
 				|| t.equalsIgnoreCase("Advertisement");
 		if (generic) { // paused, stopped or an ad: keep the last song on screen
-			playing = false;
+			setPlaying(false);
 			return;
 		}
 
@@ -131,16 +140,58 @@ public class SpotifyClient {
 		artist = newArtist;
 		title = newTitle;
 		hasTrack = true;
-		playing = true;
 
 		String key = newArtist + "\n" + newTitle;
-		if (!key.equals(lastKey)) {
+		if (!key.equals(lastKey)) { // a new song started
 			lastKey = key;
+			synchronized (this) {
+				baseMs = 0;
+				resumedAtNanos = System.nanoTime();
+				playing = true;
+			}
+			durationMs = 0;
 			int gen = ++generation;
 			coverTexture = null;
 			hasCoverColors = false;
 			NET.execute(() -> loadCover(newArtist, newTitle, gen));
+		} else {
+			setPlaying(true);
 		}
+	}
+
+	// ----------------------------------------------------------------- time
+
+	private synchronized void setPlaying(boolean now) {
+		if (now == playing) return;
+		if (now) resumedAtNanos = System.nanoTime();
+		else baseMs = rawPositionMs();
+		playing = now;
+	}
+
+	private long rawPositionMs() {
+		return playing ? baseMs + (System.nanoTime() - resumedAtNanos) / 1_000_000L : baseMs;
+	}
+
+	/** How far into the song we are (estimated). */
+	public synchronized long positionMs() {
+		long pos = rawPositionMs();
+		long dur = durationMs;
+		if (dur > 0 && pos > dur) { // same song still going: it must be on repeat
+			if (playing) {
+				baseMs = pos % dur;
+				resumedAtNanos = System.nanoTime();
+				pos = baseMs;
+			} else {
+				pos = dur;
+			}
+		}
+		return pos;
+	}
+
+	/** Lets the user correct the time by clicking the bar. */
+	public synchronized void seekTo(long ms) {
+		baseMs = Math.max(0, ms);
+		resumedAtNanos = System.nanoTime();
 	}
 
 	/** Title of Spotify's main window, or null if Spotify isn't running. */
@@ -215,6 +266,8 @@ public class SpotifyClient {
 		MinecraftClient mc = MinecraftClient.getInstance();
 		mc.execute(() -> {
 			if (gen != generation) return;
+			durationMs = cover.durationMs();
+			if (cover.argb() == null) return;
 			NativeImage img = new NativeImage(ART_SIZE, ART_SIZE, false);
 			for (int y = 0; y < ART_SIZE; y++) {
 				for (int x = 0; x < ART_SIZE; x++) img.setColorArgb(x, y, cover.argb()[y * ART_SIZE + x]);
@@ -228,7 +281,7 @@ public class SpotifyClient {
 		});
 	}
 
-	/** Finds the cover (Deezer first, iTunes as backup) and checks it is the same song. */
+	/** Finds cover + length (Deezer first, iTunes as backup) and checks it is the same song. */
 	private static Cover fetchCover(String artistName, String songTitle) throws Exception {
 		String firstArtist = artistName.split(",|&| feat\\.", 2)[0].trim();
 		String cleanTitle = songTitle
@@ -238,22 +291,29 @@ public class SpotifyClient {
 		String term = URLEncoder.encode((firstArtist + " " + cleanTitle).trim(), StandardCharsets.UTF_8);
 
 		int[] px = null;
+		long dur = 0;
 		try {
-			String url = deezerCover(term, firstArtist, cleanTitle);
-			if (url != null) px = toArt(httpGetBytes(url));
+			Hit dz = deezerHit(term, firstArtist, cleanTitle);
+			if (dz != null) {
+				dur = dz.durationMs();
+				if (dz.coverUrl() != null) px = toArt(httpGetBytes(dz.coverUrl()));
+			}
 		} catch (Exception e) {
 			SpotifyBarClient.LOGGER.debug("Deezer lookup failed", e);
 		}
-		if (px == null) {
-			String url = itunesCover(term, firstArtist, cleanTitle);
-			if (url != null) px = toArt(httpGetBytes(url));
+		if (px == null || dur == 0) {
+			Hit it = itunesHit(term, firstArtist, cleanTitle);
+			if (it != null) {
+				if (dur == 0) dur = it.durationMs();
+				if (px == null && it.coverUrl() != null) px = toArt(httpGetBytes(it.coverUrl()));
+			}
 		}
-		if (px == null) return null;
-		int[] colors = extractColors(px);
-		return new Cover(px, colors[0], colors[1]);
+		if (px == null && dur == 0) return null;
+		int[] colors = px != null ? extractColors(px) : new int[]{0x1DB954, 0x101010};
+		return new Cover(px, colors[0], colors[1], dur);
 	}
 
-	private static String deezerCover(String term, String wantArtist, String wantTitle) throws Exception {
+	private static Hit deezerHit(String term, String wantArtist, String wantTitle) throws Exception {
 		String json = httpGet("https://api.deezer.com/search?limit=5&q=" + term);
 		JsonArray data = JsonParser.parseString(json).getAsJsonObject().getAsJsonArray("data");
 		if (data == null) return null;
@@ -262,16 +322,23 @@ public class SpotifyClient {
 			String gotTitle = o.has("title") ? o.get("title").getAsString() : "";
 			String gotArtist = o.has("artist") ? o.getAsJsonObject("artist").get("name").getAsString() : "";
 			if (score(gotTitle, gotArtist, wantTitle, wantArtist) < 3) continue;
-			JsonObject album = o.getAsJsonObject("album");
-			if (album == null) continue;
-			for (String key : new String[]{"cover_medium", "cover_big", "cover"}) {
-				if (album.has(key) && !album.get(key).isJsonNull()) return album.get(key).getAsString();
+			long dur = o.has("duration") ? o.get("duration").getAsLong() * 1000L : 0;
+			String cover = null;
+			JsonObject album = o.has("album") && o.get("album").isJsonObject() ? o.getAsJsonObject("album") : null;
+			if (album != null) {
+				for (String key : new String[]{"cover_medium", "cover_big", "cover"}) {
+					if (album.has(key) && !album.get(key).isJsonNull()) {
+						cover = album.get(key).getAsString();
+						break;
+					}
+				}
 			}
+			return new Hit(cover, dur);
 		}
 		return null;
 	}
 
-	private static String itunesCover(String term, String wantArtist, String wantTitle) {
+	private static Hit itunesHit(String term, String wantArtist, String wantTitle) {
 		try {
 			String json = httpGet("https://itunes.apple.com/search?media=music&entity=song&limit=5&term=" + term);
 			JsonArray results = JsonParser.parseString(json).getAsJsonObject().getAsJsonArray("results");
@@ -281,8 +348,10 @@ public class SpotifyClient {
 				String gotTitle = o.has("trackName") ? o.get("trackName").getAsString() : "";
 				String gotArtist = o.has("artistName") ? o.get("artistName").getAsString() : "";
 				if (score(gotTitle, gotArtist, wantTitle, wantArtist) < 3) continue;
-				if (!o.has("artworkUrl100")) continue;
-				return o.get("artworkUrl100").getAsString().replace("100x100bb.jpg", "200x200bb.jpg");
+				long dur = o.has("trackTimeMillis") ? o.get("trackTimeMillis").getAsLong() : 0;
+				String cover = o.has("artworkUrl100")
+						? o.get("artworkUrl100").getAsString().replace("100x100bb.jpg", "200x200bb.jpg") : null;
+				return new Hit(cover, dur);
 			}
 		} catch (Exception e) {
 			SpotifyBarClient.LOGGER.debug("iTunes lookup failed", e);
@@ -434,7 +503,7 @@ public class SpotifyClient {
 
 	public void togglePlay() {
 		mediaKey(0xB3); // VK_MEDIA_PLAY_PAUSE
-		playing = !playing;
+		setPlaying(!playing);
 	}
 
 	public void next() {
