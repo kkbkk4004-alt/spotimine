@@ -116,7 +116,8 @@ public final class SpotifyWidget {
 		updateColors(cfg, sp);
 		int accent = 0xFF000000 | pack(cur[0], cur[1], cur[2]);
 		int bgRgb = pack(cur[3], cur[4], cur[5]);
-		int bg = 0xB0000000 | bgRgb;
+		int bgA = Math.max(30, Math.min(100, cfg.bgOpacity)) * 255 / 100;
+		int bg = (bgA << 24) | bgRgb;
 		int textC = 0xFF000000 | (cfg.textColor & 0xFFFFFF);
 		// secondary text (artist, times): the text color faded toward the background
 		int subC = 0xFF000000 | mix(cfg.textColor & 0xFFFFFF, bgRgb, 0.35f);

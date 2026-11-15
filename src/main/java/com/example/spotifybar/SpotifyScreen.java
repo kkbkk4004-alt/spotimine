@@ -32,6 +32,7 @@ public class SpotifyScreen extends Screen {
 	private ButtonWidget matchButton;
 	private ButtonWidget glowButton;
 	private ButtonWidget shapeButton;
+	private ButtonWidget opacityButton;
 	private ButtonWidget eqStyleButton;
 	private ButtonWidget eqColorButton;
 	private ButtonWidget eqBarsButton;
@@ -96,7 +97,7 @@ public class SpotifyScreen extends Screen {
 	@Override
 	protected void init() {
 		int cx = this.width / 2;
-		top = Math.min(this.height / 2 + 10, this.height - 228);
+		top = Math.min(this.height / 2 + 10, this.height - 252);
 
 		addDrawableChild(ButtonWidget.builder(Text.literal("Hide / show bar"), b -> {
 			Config.get().visible = !Config.get().visible;
@@ -142,18 +143,27 @@ public class SpotifyScreen extends Screen {
 		}).dimensions(cx + 2, top + 72, 118, 20).build();
 		addDrawableChild(eqBarsButton);
 
+		opacityButton = ButtonWidget.builder(Text.literal("Opacity"), b -> {
+			int[] steps = {50, 70, 85, 100};
+			int cur = Config.get().bgOpacity, next = steps[0];
+			for (int v : steps) { if (v > cur) { next = v; break; } }
+			Config.get().bgOpacity = next;
+			Config.get().save();
+		}).dimensions(cx - 120, top + 96, 240, 20).build();
+		addDrawableChild(opacityButton);
+
 		int tabX = cx - 119;
 		for (int i = 0; i < 4; i++) {
 			final int idx = i;
 			tabButtons[i] = ButtonWidget.builder(Text.literal(TAB_NAMES[i]), b -> {
 				tab = idx;
 				refreshHexField();
-			}).dimensions(tabX, top + 96, TAB_WIDTHS[i], 18).build();
+			}).dimensions(tabX, top + 120, TAB_WIDTHS[i], 18).build();
 			addDrawableChild(tabButtons[i]);
 			tabX += TAB_WIDTHS[i] + 2;
 		}
 
-		hexField = new TextFieldWidget(this.textRenderer, cx - 40, top + 120 + ROWS * (SW + SW_GAP) + 4,
+		hexField = new TextFieldWidget(this.textRenderer, cx - 40, top + 144 + ROWS * (SW + SW_GAP) + 4,
 				80, 18, Text.literal("Hex"));
 		hexField.setMaxLength(7);
 		hexField.setPlaceholder(Text.literal("#RRGGBB"));
@@ -176,7 +186,7 @@ public class SpotifyScreen extends Screen {
 	}
 
 	private int gridY() {
-		return top + 120;
+		return top + 144;
 	}
 
 	@Override
@@ -189,6 +199,7 @@ public class SpotifyScreen extends Screen {
 		matchButton.setMessage(Text.literal("Match cover: " + (cfg.matchCover ? "ON" : "OFF")));
 		glowButton.setMessage(Text.literal("Glow: " + (cfg.glow ? "ON" : "OFF")));
 		shapeButton.setMessage(Text.literal("Shape: " + SpotifyWidget.SHAPE_NAMES[cfg.shape % SpotifyWidget.SHAPE_NAMES.length]));
+		opacityButton.setMessage(Text.literal("Card opacity: " + cfg.bgOpacity + "%"));
 		eqStyleButton.setMessage(Text.literal("EQ: " + SpotifyWidget.EQ_STYLES[Math.floorMod(cfg.eqStyle, SpotifyWidget.EQ_STYLES.length)]));
 		eqColorButton.setMessage(Text.literal("EQ color: " + SpotifyWidget.EQ_COLORS[Math.floorMod(cfg.eqColorMode, SpotifyWidget.EQ_COLORS.length)]));
 		eqBarsButton.setMessage(Text.literal("EQ bars: " + SpotifyWidget.EQ_BAR_COUNTS[Math.floorMod(cfg.eqBars, SpotifyWidget.EQ_BAR_COUNTS.length)]));

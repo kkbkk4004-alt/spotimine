@@ -30,6 +30,8 @@ public class Config {
 	public int eqBars = 1;
 	/** index into {slow, normal, fast} - edit in the config file */
 	public int eqSpeed = 1;
+	/** Card background opacity in percent (30-100). */
+	public int bgOpacity = 100;
 	public int accent = 0x1DB954;
 	public int background = 0x101010;
 
