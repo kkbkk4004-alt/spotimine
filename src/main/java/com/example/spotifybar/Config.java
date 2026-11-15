@@ -21,6 +21,15 @@ public class Config {
 	/** 0 square, 1 rounded, 2 pill, 3 cut corners */
 	public int shape = 0;
 	public int textColor = 0xFFFFFF;
+	/** Equalizer: 0 bars, 1 rounded, 2 blocks, 3 mirror, 4 dots, 5 line, 6 off */
+	public int eqStyle = 0;
+	/** 0 accent, 1 custom color, 2 rainbow, 3 gradient (accent -> custom) */
+	public int eqColorMode = 0;
+	public int eqColor = 0x1DB954;
+	/** index into {4, 6, 8} bars */
+	public int eqBars = 1;
+	/** index into {slow, normal, fast} - edit in the config file */
+	public int eqSpeed = 1;
 	public int accent = 0x1DB954;
 	public int background = 0x101010;
 

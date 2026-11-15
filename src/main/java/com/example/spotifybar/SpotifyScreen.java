@@ -18,8 +18,9 @@ public class SpotifyScreen extends Screen {
 	private static final int COLS = 12;
 	private static final int ROWS = 4;
 
-	private static final int TAB_ACCENT = 0, TAB_BG = 1, TAB_TEXT = 2;
-	private static final String[] TAB_NAMES = {"Accent", "Background", "Text"};
+	private static final int TAB_ACCENT = 0, TAB_BG = 1, TAB_TEXT = 2, TAB_EQ = 3;
+	private static final String[] TAB_NAMES = {"Accent", "Background", "Text", "Equalizer"};
+	private static final int[] TAB_WIDTHS = {54, 76, 40, 62};
 
 	private final int[] brightPalette = buildPalette(false);
 	private final int[] darkPalette = buildPalette(true);
@@ -31,7 +32,10 @@ public class SpotifyScreen extends Screen {
 	private ButtonWidget matchButton;
 	private ButtonWidget glowButton;
 	private ButtonWidget shapeButton;
-	private final ButtonWidget[] tabButtons = new ButtonWidget[3];
+	private ButtonWidget eqStyleButton;
+	private ButtonWidget eqColorButton;
+	private ButtonWidget eqBarsButton;
+	private final ButtonWidget[] tabButtons = new ButtonWidget[4];
 	private TextFieldWidget hexField;
 
 	private boolean dragging = false;
@@ -66,6 +70,7 @@ public class SpotifyScreen extends Screen {
 		return switch (tab) {
 			case TAB_BG -> cfg.background;
 			case TAB_TEXT -> cfg.textColor;
+			case TAB_EQ -> cfg.eqColor;
 			default -> cfg.accent;
 		} & 0xFFFFFF;
 	}
@@ -76,6 +81,7 @@ public class SpotifyScreen extends Screen {
 		switch (tab) {
 			case TAB_BG -> { cfg.background = rgb; cfg.matchCover = false; }
 			case TAB_TEXT -> cfg.textColor = rgb;
+			case TAB_EQ -> { cfg.eqColor = rgb; if (cfg.eqColorMode == 0) cfg.eqColorMode = 1; }
 			default -> { cfg.accent = rgb; cfg.matchCover = false; }
 		}
 		cfg.save();
@@ -90,7 +96,7 @@ public class SpotifyScreen extends Screen {
 	@Override
 	protected void init() {
 		int cx = this.width / 2;
-		top = Math.min(this.height / 2 + 10, this.height - 204);
+		top = Math.min(this.height / 2 + 10, this.height - 228);
 
 		addDrawableChild(ButtonWidget.builder(Text.literal("Hide / show bar"), b -> {
 			Config.get().visible = !Config.get().visible;
@@ -115,19 +121,39 @@ public class SpotifyScreen extends Screen {
 		shapeButton = ButtonWidget.builder(Text.literal("Shape"), b -> {
 			Config.get().shape = (Config.get().shape + 1) % SpotifyWidget.SHAPE_NAMES.length;
 			Config.get().save();
-		}).dimensions(cx - 120, top + 48, 240, 20).build();
+		}).dimensions(cx - 120, top + 48, 118, 20).build();
 		addDrawableChild(shapeButton);
 
-		for (int i = 0; i < 3; i++) {
+		eqStyleButton = ButtonWidget.builder(Text.literal("EQ"), b -> {
+			Config.get().eqStyle = (Config.get().eqStyle + 1) % SpotifyWidget.EQ_STYLES.length;
+			Config.get().save();
+		}).dimensions(cx + 2, top + 48, 118, 20).build();
+		addDrawableChild(eqStyleButton);
+
+		eqColorButton = ButtonWidget.builder(Text.literal("EQ color"), b -> {
+			Config.get().eqColorMode = (Config.get().eqColorMode + 1) % SpotifyWidget.EQ_COLORS.length;
+			Config.get().save();
+		}).dimensions(cx - 120, top + 72, 118, 20).build();
+		addDrawableChild(eqColorButton);
+
+		eqBarsButton = ButtonWidget.builder(Text.literal("EQ bars"), b -> {
+			Config.get().eqBars = (Config.get().eqBars + 1) % SpotifyWidget.EQ_BAR_COUNTS.length;
+			Config.get().save();
+		}).dimensions(cx + 2, top + 72, 118, 20).build();
+		addDrawableChild(eqBarsButton);
+
+		int tabX = cx - 119;
+		for (int i = 0; i < 4; i++) {
 			final int idx = i;
 			tabButtons[i] = ButtonWidget.builder(Text.literal(TAB_NAMES[i]), b -> {
 				tab = idx;
 				refreshHexField();
-			}).dimensions(cx - 119 + i * 80, top + 72, 78, 18).build();
+			}).dimensions(tabX, top + 96, TAB_WIDTHS[i], 18).build();
 			addDrawableChild(tabButtons[i]);
+			tabX += TAB_WIDTHS[i] + 2;
 		}
 
-		hexField = new TextFieldWidget(this.textRenderer, cx - 40, top + 96 + ROWS * (SW + SW_GAP) + 4,
+		hexField = new TextFieldWidget(this.textRenderer, cx - 40, top + 120 + ROWS * (SW + SW_GAP) + 4,
 				80, 18, Text.literal("Hex"));
 		hexField.setMaxLength(7);
 		hexField.setPlaceholder(Text.literal("#RRGGBB"));
@@ -150,7 +176,7 @@ public class SpotifyScreen extends Screen {
 	}
 
 	private int gridY() {
-		return top + 96;
+		return top + 120;
 	}
 
 	@Override
@@ -162,8 +188,11 @@ public class SpotifyScreen extends Screen {
 		clamp(cfg);
 		matchButton.setMessage(Text.literal("Match cover: " + (cfg.matchCover ? "ON" : "OFF")));
 		glowButton.setMessage(Text.literal("Glow: " + (cfg.glow ? "ON" : "OFF")));
-		shapeButton.setMessage(Text.literal("Card shape: " + SpotifyWidget.SHAPE_NAMES[cfg.shape % SpotifyWidget.SHAPE_NAMES.length]));
-		for (int i = 0; i < 3; i++) tabButtons[i].active = i != tab;
+		shapeButton.setMessage(Text.literal("Shape: " + SpotifyWidget.SHAPE_NAMES[cfg.shape % SpotifyWidget.SHAPE_NAMES.length]));
+		eqStyleButton.setMessage(Text.literal("EQ: " + SpotifyWidget.EQ_STYLES[Math.floorMod(cfg.eqStyle, SpotifyWidget.EQ_STYLES.length)]));
+		eqColorButton.setMessage(Text.literal("EQ color: " + SpotifyWidget.EQ_COLORS[Math.floorMod(cfg.eqColorMode, SpotifyWidget.EQ_COLORS.length)]));
+		eqBarsButton.setMessage(Text.literal("EQ bars: " + SpotifyWidget.EQ_BAR_COUNTS[Math.floorMod(cfg.eqBars, SpotifyWidget.EQ_BAR_COUNTS.length)]));
+		for (int i = 0; i < tabButtons.length; i++) tabButtons[i].active = i != tab;
 
 		SpotifyWidget.draw(ctx, cfg.x, cfg.y);
 

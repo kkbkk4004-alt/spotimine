@@ -24,6 +24,10 @@ account, nothing leaves your PC.
 - Chat: while the chat is open you can drag the card, use the previous / play-pause / next buttons
   that appear under it, and click the time bar to sync the time. No need for the J screen.
 
+- Equalizer: in the J screen choose its shape (Bars, Rounded, Blocks, Mirror, Dots, Line or Off), its color
+  mode (Accent, Custom, Rainbow, Gradient) and the number of bars (4/6/8). For Custom/Gradient pick the
+  color in the "Equalizer" tab. The movement is an animation (a mod can't read Spotify's audio).
+
 ## Notes
 
 - Needs the Spotify **desktop app** (not the web player). The song is read from

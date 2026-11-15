@@ -12,7 +12,7 @@ public final class SpotifyWidget {
 	private static final int PAD = 6;
 	private static final int COVER = 32;
 	private static final int BAR_Y = 31;     // progress bar, relative to the card top
-	private static final int WAVES_W = 22;
+	private static final int WAVES_W = 24;
 
 	/** Colors currently on screen {accent rgb, background rgb}; they slide toward the target. */
 	private static float[] cur = null;
@@ -29,6 +29,13 @@ public final class SpotifyWidget {
 		int textX = x + PAD + 2 + COVER + 6;
 		return new int[]{textX, y + BAR_Y, x + WIDTH - PAD - textX};
 	}
+
+	/** Names for the equalizer buttons. The last style is "Off". */
+	public static final String[] EQ_STYLES = {"Bars", "Rounded", "Blocks", "Mirror", "Dots", "Line", "Off"};
+	public static final String[] EQ_COLORS = {"Accent", "Custom", "Rainbow", "Gradient"};
+	public static final int[] EQ_BAR_COUNTS = {4, 6, 8};
+	private static final float[] EQ_SPEEDS = {0.6f, 1f, 1.6f};
+	private static final int EQ_H = 11;
 
 	/** Names for the shape button. */
 	public static final String[] SHAPE_NAMES = {"Square", "Rounded", "Pill", "Cut corners"};
@@ -161,9 +168,10 @@ public final class SpotifyWidget {
 		int textW = x + WIDTH - PAD - textX;
 
 		ctx.drawText(tr, trim(tr, sp.title, textW, 3), textX, y + 5, textC, false);
-		ctx.drawText(tr, trim(tr, sp.artist, textW - WAVES_W - 4, 4), textX, y + 16, subC, false);
+		boolean eqOn = cfg.eqStyle >= 0 && cfg.eqStyle < EQ_STYLES.length - 1;
+		ctx.drawText(tr, trim(tr, sp.artist, textW - (eqOn ? WAVES_W + 4 : 0), 4), textX, y + 16, subC, false);
 
-		drawWaves(ctx, x + WIDTH - PAD - WAVES_W, y + 27, sp.playing, accent, subC);
+		drawEqualizer(ctx, x + WIDTH - PAD - WAVES_W, y + 27, sp.playing, accent & 0xFFFFFF, subC, cfg);
 
 		// progress bar + times
 		long dur = sp.durationMs;
@@ -214,15 +222,87 @@ public final class SpotifyWidget {
 		}
 	}
 
-	/** Animated equalizer bars. They dance while music plays and sit flat when paused. */
-	private static void drawWaves(DrawContext ctx, int x, int baseY, boolean playing, int accent, int idle) {
-		long t = System.currentTimeMillis();
-		for (int i = 0; i < 6; i++) {
-			double h = playing
+	/** Color of bar i for the chosen equalizer color mode (RGB). */
+	private static int eqRgb(Config cfg, int i, int n, int accentRgb, long now) {
+		return switch (cfg.eqColorMode) {
+			case 1 -> cfg.eqColor & 0xFFFFFF;
+			case 2 -> SpotifyClient.hsvToRgb((i / (float) n + (now % 6000) / 6000f) % 1f, 0.75f, 1f);
+			case 3 -> mix(accentRgb, cfg.eqColor & 0xFFFFFF, n > 1 ? i / (float) (n - 1) : 0f);
+			default -> accentRgb;
+		};
+	}
+
+	/**
+	 * Animated equalizer. It dances while music plays and sits flat when paused.
+	 * (The movement is an animation - a mod can't read Spotify's audio.)
+	 */
+	private static void drawEqualizer(DrawContext ctx, int x, int baseY, boolean playing,
+									  int accentRgb, int idleArgb, Config cfg) {
+		int style = cfg.eqStyle;
+		if (style < 0 || style >= EQ_STYLES.length - 1) return; // off
+		int n = EQ_BAR_COUNTS[Math.floorMod(cfg.eqBars, EQ_BAR_COUNTS.length)];
+		float speed = EQ_SPEEDS[Math.floorMod(cfg.eqSpeed, EQ_SPEEDS.length)];
+		int slot = WAVES_W / n;
+		int bw = Math.max(1, slot - 1);
+		long now = System.currentTimeMillis();
+		double t = now * (double) speed;
+
+		int[] hh = new int[n];
+		int[] col = new int[n];
+		for (int i = 0; i < n; i++) {
+			double level = playing
 					? 0.2 + 0.8 * Math.abs(Math.sin(t / 170.0 + i * 1.7) * Math.cos(t / 290.0 + i * 0.9))
 					: 0.12;
-			int hh = Math.max(1, (int) (11 * h));
-			ctx.fill(x + i * 4, baseY - hh, x + i * 4 + 2, baseY, playing ? accent : idle);
+			hh[i] = Math.max(1, (int) (EQ_H * level));
+			col[i] = playing ? 0xFF000000 | eqRgb(cfg, i, n, accentRgb, now) : idleArgb;
+		}
+
+		for (int i = 0; i < n; i++) {
+			int bx = x + i * slot;
+			int top = baseY - hh[i];
+			switch (style) {
+				case 0 -> ctx.fill(bx, top, bx + bw, baseY, col[i]); // bars
+				case 1 -> { // rounded bars: corners cut off
+					if (bw >= 3 && hh[i] >= 3) {
+						ctx.fill(bx + 1, top, bx + bw - 1, top + 1, col[i]);
+						ctx.fill(bx, top + 1, bx + bw, baseY - 1, col[i]);
+						ctx.fill(bx + 1, baseY - 1, bx + bw - 1, baseY, col[i]);
+					} else {
+						ctx.fill(bx, top, bx + bw, baseY, col[i]);
+					}
+				}
+				case 2 -> { // blocks: LED-style segments
+					int segs = Math.max(1, hh[i] / 3);
+					for (int sgm = 0; sgm < segs; sgm++) {
+						int sy = baseY - sgm * 3;
+						ctx.fill(bx, sy - 2, bx + bw, sy, col[i]);
+					}
+				}
+				case 3 -> { // mirror: grows up and down from the middle
+					int mid = baseY - EQ_H / 2;
+					int half = Math.max(1, hh[i] / 2);
+					ctx.fill(bx, mid - half, bx + bw, mid + half, col[i]);
+				}
+				case 4 -> { // dots
+					int ds = Math.max(2, bw);
+					int dy = Math.min(top, baseY - ds);
+					if (ds >= 3) {
+						ctx.fill(bx + 1, dy, bx + ds - 1, dy + 1, col[i]);
+						ctx.fill(bx, dy + 1, bx + ds, dy + ds - 1, col[i]);
+						ctx.fill(bx + 1, dy + ds - 1, bx + ds - 1, dy + ds, col[i]);
+					} else {
+						ctx.fill(bx, dy, bx + ds, dy + ds, col[i]);
+					}
+				}
+				case 5 -> { // line: stepped wave through the bar heights
+					ctx.fill(bx, top, bx + slot, top + 1, col[i]);
+					if (i + 1 < n) {
+						int nextTop = baseY - hh[i + 1];
+						ctx.fill(bx + slot, Math.min(top, nextTop), bx + slot + 1, Math.max(top, nextTop) + 1, col[i]);
+					}
+				}
+				default -> { }
+			}
 		}
 	}
 
